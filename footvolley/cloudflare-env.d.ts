@@ -1,0 +1,10 @@
+declare namespace Cloudflare {
+  interface Env {
+    DB?: D1Database;
+    BUCKET?: R2Bucket;
+  }
+}
+declare namespace Cloudflare {interface Env {OWNER_EMAIL?:string;}}
+
+declare namespace Cloudflare {interface Env {AUTH_MODE?:string;}}
+declare namespace Cloudflare {interface Env {FOOTVOLLEY_HOST_PASSWORD_HASH?:string;FOOTVOLLEY_HOST_PASSWORD_SALT?:string;}}

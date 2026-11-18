@@ -1,0 +1,13 @@
+{
+  "checked_date": "2026-11-13",
+  "command": "npm audit --omit=dev",
+  "vulnerabilities": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 0,
+    "critical": 0,
+    "total": 0
+  },
+  "note": "Registry audit of production dependency tree; not a penetration test."
+}

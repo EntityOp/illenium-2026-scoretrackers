@@ -1,0 +1,37 @@
+import {build} from 'esbuild';
+import {readFileSync,mkdtempSync,rmSync,readdirSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import assert from 'node:assert/strict';
+const out=mkdtempSync(join(tmpdir(),'illenium-api-'));
+const stub=`import {DatabaseSync} from 'node:sqlite';import {readFileSync} from 'node:fs';
+const sql=new DatabaseSync(':memory:');sql.exec(${JSON.stringify(readdirSync('drizzle').filter(x=>x.endsWith('.sql')).sort().map(x=>readFileSync(join('drizzle',x),'utf8')).join('\n'))});
+class Statement{constructor(q){this.q=q;this.args=[]}bind(...args){this.args=args;return this}async first(){env.reads++;await new Promise(r=>setTimeout(r,5));return sql.prepare(this.q).get(...this.args)||null}async run(){const r=sql.prepare(this.q).run(...this.args);return {meta:{changes:Number(r.changes)}}}}
+export const env={reads:0,OWNER_EMAIL:'owner@example.test',DB:{prepare:q=>new Statement(q),batch:async a=>{const r=[];for(const s of a)r.push(await s.run());return r}}};`;
+await build({stdin:{contents:`export * as auth from './app/api/auth/route.ts';export * as live from './app/api/live/route.ts';export {env as testEnv} from 'cloudflare:workers';`,resolveDir:process.cwd()},outfile:join(out,'api.mjs'),bundle:true,platform:'node',format:'esm',plugins:[{name:'test-env',setup(b){b.onResolve({filter:/^cloudflare:workers$/},()=>({path:'env',namespace:'test-env'}));b.onLoad({filter:/.*/,namespace:'test-env'},()=>({contents:stub,loader:'js'}));}}]});
+const {auth,live,testEnv}=await import(join(out,'api.mjs'));
+const origin='https://test.local';
+const req=(path,body,headers={})=>new Request(origin+path,{method:'POST',headers:{'Content-Type':'application/json',origin,...headers},body:JSON.stringify(path==='/api/live'?{actionId:crypto.randomUUID(),...body}:body)});
+assert.equal((await live.GET()).status,200);
+assert.equal((await live.POST(req('/api/live',{version:0,action:{id:'cricket-1',type:'start'}}))).status,401);
+const password=crypto.randomUUID();
+assert.equal((await auth.POST(req('/api/auth',{type:'setup',password}))).status,403);
+let r=await auth.POST(req('/api/auth',{type:'setup',password},{'oai-authenticated-user-id':'test-owner','oai-authenticated-user-email':'owner@example.test'}));assert.equal(r.status,200);assert.match(r.headers.get('set-cookie'),/HttpOnly; Secure; SameSite=Strict/);const cookie=r.headers.get('set-cookie').split(';')[0];
+r=await auth.POST(req('/api/auth',{type:'login',password:'incorrect-password'}));assert.equal(r.status,401);
+r=await auth.POST(req('/api/auth',{type:'login',password}));assert.equal(r.status,200);
+let body={actionId:crypto.randomUUID(),version:0,action:{id:'cricket-1',type:'fixture',teams:['Test A','Test B'],start:'09:00',end:'09:30'}};
+assert.equal((await live.POST(req('/api/live',body,{cookie,origin:'https://evil.test'}))).status,403);
+r=await live.POST(req('/api/live',body,{cookie}));assert.equal(r.status,200);assert.equal((await r.json()).version,1);
+const duplicate=await live.POST(req('/api/live',body,{cookie}));assert.equal(duplicate.status,200);assert.equal((await duplicate.json()).duplicate,true);assert.equal((await live.POST(req('/api/live',{...body,actionId:crypto.randomUUID()},{cookie}))).status,409);
+r=await live.POST(req('/api/live',{version:1,action:{id:'cricket-1',type:'start',firstBat:0}},{cookie}));assert.equal(r.status,200);
+r=await live.GET();const state=await r.json();assert.equal(state.state.matches[0].status,'live');assert.equal('history' in state.state.matches[0],false);
+assert.equal((await auth.POST(req('/api/auth',{type:'logout'},{cookie}))).status,200);
+assert.equal((await live.POST(req('/api/live',{version:2,action:{id:'cricket-1',type:'ball',kind:'wide'}},{cookie}))).status,401);
+
+assert.equal((await auth.POST(req('/api/auth',{type:'login',password:'x'.repeat(9000)}))).status,413);
+assert.equal((await auth.POST(new Request(origin+'/api/auth',{method:'POST',headers:{origin,'Content-Type':'text/plain'},body:'hello'}))).status,415);
+for(let n=0;n<10;n++)await auth.POST(req('/api/auth',{type:'login',password:'wrong-password'},{'cf-connecting-ip':'192.0.2.99'}));
+assert.equal((await auth.POST(req('/api/auth',{type:'login',password},{'cf-connecting-ip':'192.0.2.99'}))).status,429);
+assert.equal((await live.GET(new Request(origin+'/api/live',{headers:{'If-None-Match':'"cricket-v3-2"'}}))).status,304);
+await new Promise(r=>setTimeout(r,2100));const before=testEnv.reads,start=performance.now();const burst=await Promise.all(Array.from({length:500},()=>live.GET(new Request(origin+'/api/live'))));assert(burst.every(r=>r.status===200));assert.equal(testEnv.reads-before,1);console.log('PASS: 500 simultaneous public reads, one database query, '+Math.round(performance.now()-start)+' ms (local simulation).');
+rmSync(out,{recursive:true});console.log('PASS: anonymous viewing, protected writes, owner-only setup, password login, secure sessions, CSRF rejection, persistence, concurrent update protection and logout.');

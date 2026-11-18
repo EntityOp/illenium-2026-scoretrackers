@@ -1,0 +1,9 @@
+export class HttpError extends Error{constructor(message:string,public status=400){super(message);}}
+export async function readJson(req:Request,max=8192):Promise<any>{
+ if(!req.headers.get('content-type')?.toLowerCase().startsWith('application/json'))throw new HttpError('JSON required.',415);
+ if(Number(req.headers.get('content-length')||0)>max)throw new HttpError('Request too large.',413);
+ if(!req.body)throw new HttpError('Missing request body.');const reader=req.body.getReader();const chunks:Uint8Array[]=[];let size=0;
+ try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>max){await reader.cancel();throw new HttpError('Request too large.',413);}chunks.push(value);}}finally{reader.releaseLock();}
+ const bytes=new Uint8Array(size);let at=0;for(const c of chunks){bytes.set(c,at);at+=c.length;}let data;try{data=JSON.parse(new TextDecoder().decode(bytes));}catch{throw new HttpError('Invalid JSON.');}if(!data||typeof data!=='object'||Array.isArray(data))throw new HttpError('JSON object required.');return data;
+}
+export function secureResponse(r:Response,production=true){const out=new Response(r.body,r);out.headers.set('X-Content-Type-Options','nosniff');out.headers.set('Referrer-Policy','strict-origin-when-cross-origin');out.headers.set('Permissions-Policy','camera=(), microphone=(), geolocation=(), payment=(), usb=()');if(production){out.headers.set('Strict-Transport-Security','max-age=31536000');out.headers.set('Content-Security-Policy',"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self' https://chatgpt.com https://*.chatgpt.com; upgrade-insecure-requests");}return out;}
