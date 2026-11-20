@@ -1,4 +1,4 @@
-export type Match={id:string,n:number,round:string,slot:string,start:string,end:string,teams:[string,string],status:'upcoming'|'live'|'finished',points:[number,number],winner?:number,history:string[],canUndo?:boolean};
+export type Match={id:string,n:number,round:string,slot:string,start:string,end:string,teams:[string,string],status:'upcoming'|'live'|'finished',points:[number,number],winner?:number,resolution?:'walkover'|'no-result',history:string[],canUndo?:boolean};
 export type State={matches:Match[],updated:string|null,recentActions:string[]};
 const clock=(minutes:number)=>`${String(Math.floor(minutes/60)).padStart(2,'0')}:${String(minutes%60).padStart(2,'0')}`;
 function fixture(n:number,start:number,duration:number){
@@ -26,7 +26,7 @@ export function transition(input:State,action:any):State{
  const state=structuredClone(input);
  if(action.type==='resetTournament'){
   assert(action.confirmation==='RESET ALL','Type RESET ALL to confirm.');
-  for(const m of state.matches){const {history,...before}=m;m.history=[...history,JSON.stringify(before)].slice(-120);m.status='upcoming';m.points=[0,0];delete m.winner;}
+  for(const m of state.matches){const {history,...before}=m;m.history=[...history,JSON.stringify(before)].slice(-120);m.status='upcoming';m.points=[0,0];delete m.winner;delete m.resolution;}
   state.updated=new Date().toISOString();return state;
  }
  const m=state.matches.find(x=>x.id===action.id);assert(m,'Match not found.');if(!m)return state;
@@ -35,24 +35,31 @@ export function transition(input:State,action:any):State{
   state.matches=state.matches.filter(x=>x.id!==m.id);state.updated=new Date().toISOString();return state;
  }
  if(action.type==='undo'){
-  assert(m.history.length,'Nothing to undo.');const old=JSON.parse(m.history.pop()!);assert(old.status!=='live'||!state.matches.some(x=>x.id!==m.id&&x.status==='live'),'Finish the other live match first.');delete m.winner;Object.assign(m,old);
+  assert(m.history.length,'Nothing to undo.');const old=JSON.parse(m.history.pop()!);assert(old.status!=='live'||!state.matches.some(x=>x.id!==m.id&&x.status==='live'),'Finish the other live match first.');delete m.winner;delete m.resolution;Object.assign(m,old);
  }else{
   const {history,...before}=m;m.history=[...history,JSON.stringify(before)].slice(-120);
-  if(action.type==='fixture'){
+  if(action.type==='absence'){
+   assert(m.status==='upcoming','Record attendance before starting the match.');
+   assert(action.confirmation==='CONFIRM ABSENCE','Confirm the attendance result.');
+   assert(action.winner===0||action.winner===1||action.winner===null,'Select the attending team or neither team.');
+   if(action.winner!==null)assert(!!m.teams[action.winner]?.trim(),'Enter the attending team name first.');
+   m.status='finished';m.resolution=action.winner===null?'no-result':'walkover';
+   if(action.winner===null)delete m.winner;else m.winner=action.winner;
+  }else if(action.type==='fixture'){
    assert(m.status==='upcoming','Only upcoming fixtures can be edited.');
    assert(Array.isArray(action.teams)&&action.teams.length===2&&action.teams.every((t:any)=>typeof t==='string'&&t.trim().length>0&&t.trim().length<=60),'Enter both team names (up to 60 characters).');
    assert(/^([01]\d|2[0-3]):[0-5]\d$/.test(action.start)&&/^([01]\d|2[0-3]):[0-5]\d$/.test(action.end)&&action.start<action.end,'Enter valid start and end times.');
    m.teams=action.teams.map((t:string)=>t.trim()) as [string,string];m.start=action.start;m.end=action.end;
   }else if(action.type==='start'){
    assert(m.status==='upcoming'&&m.teams.every(Boolean)&&m.teams[0]!==m.teams[1],'Enter two different teams before starting.');
-   assert(!state.matches.some(x=>x.status==='live'),'Finish the current live match first.');m.status='live';m.points=[0,0];delete m.winner;
+   assert(!state.matches.some(x=>x.status==='live'),'Finish the current live match first.');m.status='live';m.points=[0,0];delete m.winner;delete m.resolution;
   }else if(action.type==='point'){
    assert(m.status==='live','This match is not live.');assert(action.team===0||action.team===1,'Choose a team.');
    m.points[action.team]++;const winner=matchWinner(m.points);if(winner!==null){m.status='finished';m.winner=winner;}
   }else if(action.type==='correct'){
-   assert(m.status==='live','Only a live score can be corrected.');m.points=safePoints(action.points);const winner=matchWinner(m.points);if(winner!==null){m.status='finished';m.winner=winner;}else{m.status='live';delete m.winner;}
+   assert(m.status==='live','Only a live score can be corrected.');m.points=safePoints(action.points);const winner=matchWinner(m.points);if(winner!==null){m.status='finished';m.winner=winner;}else{m.status='live';delete m.winner;delete m.resolution;}
   }else if(action.type==='resetMatch'){
-   assert(action.confirmation===`RESET ${m.n}`,'Type the match reset confirmation.');m.status='upcoming';m.points=[0,0];delete m.winner;
+   assert(action.confirmation===`RESET ${m.n}`,'Type the match reset confirmation.');m.status='upcoming';m.points=[0,0];delete m.winner;delete m.resolution;
   }else throw new GameError('Unknown match action.');
  }
  state.updated=new Date().toISOString();return state;
