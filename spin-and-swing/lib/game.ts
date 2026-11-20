@@ -1,6 +1,6 @@
 export type Declaration={target:number,actual:number,base:number,status:'active'|'success'|'failed'|'skipped',unusedBalls:number,wicketPenalty?:number};
 export type Innings={team:number,runs:number,wickets:number,balls:number,events:string[],closed?:boolean,declaration?:Declaration};
-export type Match={id:string,sport:'cricket',n:number,round:string,start:string,end:string,teams:[string,string],status:'upcoming'|'live'|'finished',innings:Innings[],winner?:number,history:string[]};
+export type Match={id:string,sport:'cricket',n:number,round:string,start:string,end:string,teams:[string,string],status:'upcoming'|'live'|'finished',innings:Innings[],winner?:number,resolution?:'walkover'|'no-result',history:string[]};
 export type State={matches:Match[],updated:string|null,recentActions?:string[]};
 const time=(n:number)=>`${String(Math.floor(n/60)).padStart(2,'0')}:${String(n%60).padStart(2,'0')}`;
 export function initialState():State{return {matches:Array.from({length:15},(_,k)=>{const n=k+1,start=540+k*30+(n>8?30:0);return {id:`cricket-${n}`,sport:'cricket',n,round:n<=8?'Round 1':n<=12?'Quarter-final':n<=14?'Semi-final':'Grand final',start:time(start),end:time(start+30),teams:['',''],status:'upcoming',innings:[],history:[]};}),updated:null,recentActions:[]};}
@@ -55,7 +55,7 @@ export function transition(input:State,action:any):State{
  assert(action&&typeof action==='object','Invalid action.');const state=normalizeState(structuredClone(input));
  if(action.type==='resetTournament'){
   assert(action.confirmation==='RESET ALL','Type RESET ALL to confirm.');
-  for(const match of state.matches){const {history,...before}=match;match.history=[...history,JSON.stringify(before)].slice(-120);match.innings=[];match.status='upcoming';delete match.winner;}
+  for(const match of state.matches){const {history,...before}=match;match.history=[...history,JSON.stringify(before)].slice(-120);match.innings=[];match.status='upcoming';delete match.winner;delete match.resolution;}
   state.updated=new Date().toISOString();return state;
  }
  const m=state.matches.find(x=>x.id===action.id);assert(m,'Match not found.');if(!m)return state;
@@ -63,12 +63,19 @@ export function transition(input:State,action:any):State{
   assert(action.confirmation===`DELETE ${m.n}`,'Type the match deletion confirmation.');
   state.matches=state.matches.filter(x=>x.id!==m.id);state.updated=new Date().toISOString();return state;
  }
- if(action.type==='undo'){assert(m.history.length,'Nothing to undo.');const old=JSON.parse(m.history.pop()!);assert(old.status!=='live'||!state.matches.some(x=>x.id!==m.id&&x.status==='live'),'Finish the other live match before undoing this result.');delete m.winner;Object.assign(m,old);}
+ if(action.type==='undo'){assert(m.history.length,'Nothing to undo.');const old=JSON.parse(m.history.pop()!);assert(old.status!=='live'||!state.matches.some(x=>x.id!==m.id&&x.status==='live'),'Finish the other live match before undoing this result.');delete m.winner;delete m.resolution;Object.assign(m,old);}
  else{
   const {history,...before}=m;m.history=[...history,JSON.stringify(before)].slice(-120);
-  if(action.type==='resetMatch'){
+  if(action.type==='absence'){
+   assert(m.status==='upcoming','Record attendance before starting the match.');
+   assert(action.confirmation==='CONFIRM ABSENCE','Confirm the attendance result.');
+   assert(action.winner===0||action.winner===1||action.winner===null,'Select the attending team or neither team.');
+   if(action.winner!==null)assert(!!m.teams[action.winner]?.trim(),'Enter the attending team name first.');
+   m.status='finished';m.resolution=action.winner===null?'no-result':'walkover';
+   if(action.winner===null)delete m.winner;else m.winner=action.winner;
+  }else if(action.type==='resetMatch'){
    assert(action.confirmation===`RESET ${m.n}`,'Type the match reset confirmation.');
-   m.innings=[];m.status='upcoming';delete m.winner;
+   m.innings=[];m.status='upcoming';delete m.winner;delete m.resolution;
   }else if(action.type==='fixture'){
    assert(m.status==='upcoming','Only upcoming fixtures can be edited.');assert(Array.isArray(action.teams)&&action.teams.length===2&&action.teams.every((t:any)=>typeof t==='string'&&t.trim().length<=60),'Team names must be at most 60 characters.');
    assert(/^([01]\d|2[0-3]):[0-5]\d$/.test(action.start)&&/^([01]\d|2[0-3]):[0-5]\d$/.test(action.end)&&action.start<action.end,'Enter valid start and end times.');m.teams=action.teams.map((t:string)=>t.trim());m.start=action.start;m.end=action.end;
