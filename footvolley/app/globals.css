@@ -76,3 +76,5 @@ label,.hint,.typed-field small{color:#cbbbdc}.manage-matches{background:#220F23}
 @media(max-width:380px){.header{gap:6px;padding:12px 8px}.header .presenting-brand{gap:5px}.header .presenting-brand>a{flex-basis:78px}.header .presented-sponsor{width:82px}.header .presenting-brand>span{font-size:5px;letter-spacing:0}.header .header-phab img{width:40px}.header .header-phab>span{font-size:5px}.hero h1{font-size:46px}}
 
 .header .header-phab .phab-logo{display:block;width:95px;height:40px;mix-blend-mode:screen;overflow:hidden}@media(max-width:760px){.header .header-phab .phab-logo{width:55px;height:25px}}@media(max-width:380px){.header .header-phab .phab-logo{width:40px;height:20px}}
+
+.fixture-end .fixture-actions{margin-left:0;text-align:left}.fixture-actions .manage-matches{color:var(--white);white-space:normal}.fixture-actions button{width:100%}.fixture-row:has(.fixture-actions[open]){position:relative;z-index:25}
