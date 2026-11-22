@@ -53,6 +53,14 @@ const assert=(v:unknown,msg:string)=>{if(!v)throw new GameError(msg);};
 const num=(v:unknown,max:number)=>{assert(Number.isSafeInteger(v)&&Number(v)>=0&&Number(v)<=max,'Invalid score.');return Number(v);};
 export function transition(input:State,action:any):State{
  assert(action&&typeof action==='object','Invalid action.');const state=normalizeState(structuredClone(input));
+ if(action.type==='addFixture'){
+  assert(Array.isArray(action.teams)&&action.teams.length===2&&action.teams.every((t:any)=>typeof t==='string'&&t.trim().length>0&&t.trim().length<=60),'Enter both team names (up to 60 characters).');
+  assert(typeof action.round==='string'&&action.round.trim().length>0&&action.round.trim().length<=60,'Enter a round name (up to 60 characters).');
+  assert(/^([01]\d|2[0-3]):[0-5]\d$/.test(action.start)&&/^([01]\d|2[0-3]):[0-5]\d$/.test(action.end)&&action.start<action.end,'Enter valid start and end times.');
+  const n=Math.max(0,...state.matches.map(match=>match.n))+1;
+  state.matches.push({id:`cricket-${n}-${Date.now()}`,sport:'cricket',n,round:action.round.trim(),start:action.start,end:action.end,teams:action.teams.map((t:string)=>t.trim()) as [string,string],status:'upcoming',innings:[],history:[]});
+  state.updated=new Date().toISOString();return state;
+ }
  if(action.type==='resetTournament'){
   assert(action.confirmation==='RESET ALL','Type RESET ALL to confirm.');
   for(const match of state.matches){const {history,...before}=match;match.history=[...history,JSON.stringify(before)].slice(-120);match.innings=[];match.status='upcoming';delete match.winner;delete match.resolution;}
