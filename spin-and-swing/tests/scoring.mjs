@@ -20,6 +20,14 @@ assert.equal(initialState().matches.length,15);
 assert.equal(initialState().matches[8].start,'13:30');
 assert.equal(initialState().matches[14].end,'17:00');
 
+state=initialState();
+state=transition(state,{type:'addFixture',round:'Exhibition',teams:['Gamma','Delta'],start:'17:00',end:'17:30'});
+assert.equal(state.matches.length,16);
+assert.equal(state.matches.at(-1).n,16);
+assert.equal(state.matches.at(-1).round,'Exhibition');
+assert.deepEqual(state.matches.at(-1).teams,['Gamma','Delta']);
+assert.throws(()=>transition(state,{type:'addFixture',round:'',teams:['Gamma','Delta'],start:'17:00',end:'17:30'}));
+
 // A target is mandatory after 2.0 overs, and success settles immediately.
 ready();
 assert(needsDeclaration(match()));
@@ -37,6 +45,7 @@ assert.equal(inning().balls,13);
 assert.equal(inning().declaration.status,'active');
 
 // Undoing from the third over to 2.0 removes its form and target.
+act('undo');
 act('undo');
 assert.equal(inning().balls,12);
 assert.equal(inning().declaration,undefined);
@@ -137,6 +146,7 @@ target(0,{wickets:1});
 const legacy=structuredClone(state);
 delete legacy.matches[0].innings[0].declaration.wicketPenalty;
 legacy.matches[0].innings[0].runs=20;
+legacy.matches[0].innings[0].declaration.base=20;
 const migrated=normalizeState(legacy).matches[0].innings[0];
 assert.equal(migrated.declaration.wicketPenalty,5);
 assert.equal(migrated.runs,15);
