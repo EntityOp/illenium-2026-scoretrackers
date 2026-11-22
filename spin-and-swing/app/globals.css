@@ -113,3 +113,4 @@ label,.hint,.typed-field small{color:#cbbbdc}.manage-matches{background:#220F23}
 .fixture-end .fixture-actions{margin-left:0;text-align:left}.fixture-actions .manage-matches{color:var(--white);white-space:normal}.fixture-actions button{width:100%}.fixture-row:has(.fixture-actions[open]){position:relative;z-index:25}
 
 .host-session-actions{display:flex;justify-content:center;margin:40px 0 0;padding:24px 0;border-top:1px solid var(--border)}.host-session-actions button{min-height:44px;padding:12px 24px}
+.panel-actions{display:flex;align-items:center;gap:10px}.modal>p{margin:0 0 16px}.modal form{display:grid;gap:14px}
