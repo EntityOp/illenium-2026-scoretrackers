@@ -15,6 +15,14 @@ assert.equal(matchWinner([14,14]),null);
 assert.equal(matchWinner([15,14]),null);
 assert.equal(matchWinner([16,14]),0);
 
+state=transition(state,{type:'addFixture',round:'Exhibition',teams:['Gamma','Delta'],start:'15:45',end:'16:05'});
+assert.equal(state.matches.length,22);
+assert.equal(state.matches.at(-1).n,22);
+assert.equal(state.matches.at(-1).slot,'Exhibition · Match 22');
+assert.deepEqual(state.matches.at(-1).teams,['Gamma','Delta']);
+assert.throws(()=>transition(state,{type:'addFixture',round:'Exhibition',teams:['Gamma',''],start:'15:45',end:'16:05'}));
+state=initialState();
+
 act('fixture',{teams:['Alpha','Beta'],start:'09:30',end:'09:45'});
 act('start');
 assert.throws(()=>transition(state,{id:'footvolley-2',type:'start'}));
