@@ -1,5 +1,5 @@
 export type Match={id:string,n:number,round:string,slot:string,start:string,end:string,teams:[string,string],status:'upcoming'|'live'|'finished',points:[number,number],winner?:number,resolution?:'walkover'|'no-result',history:string[],canUndo?:boolean};
-export type State={matches:Match[],updated:string|null,recentActions:string[]};
+export type State={matches:Match[],updated:string|null,recentActions:string[],schemaVersion?:number};
 const clock=(minutes:number)=>`${String(Math.floor(minutes/60)).padStart(2,'0')}:${String(minutes%60).padStart(2,'0')}`;
 function fixture(n:number,start:number,duration:number){
  const round=n<=10?'Round 1':n<=15?'Round 2':n<=18?'Round 3':n<=20?'Round 4':'Grand Final';
@@ -11,7 +11,15 @@ export function initialState():State{
  for(let k=0;k<10;k++)matches.push(fixture(k+1,570+k*15,15));
  for(let k=0;k<5;k++)matches.push(fixture(k+11,720+k*15,15));
  for(let k=0;k<6;k++)matches.push(fixture(k+16,825+k*20,20));
- return {matches,updated:null,recentActions:[]};
+ matches.push({id:'footvolley-third-place',n:22,round:'Third Place',slot:'Third Place · Match 22',start:'15:45',end:'16:05',teams:['',''],status:'upcoming',points:[0,0],history:[]});
+ return {matches,updated:null,recentActions:[],schemaVersion:2};
+}
+export function normalizeState(input:State):State{
+ const state=structuredClone(input);
+ state.recentActions=state.recentActions||[];
+ for(const match of state.matches)match.history=match.history||[];
+ if((state.schemaVersion||1)<2&&!state.matches.some(match=>match.id==='footvolley-third-place'))state.matches.push({id:'footvolley-third-place',n:Math.max(21,...state.matches.map(match=>match.n))+1,round:'Third Place',slot:`Third Place · Match ${Math.max(21,...state.matches.map(match=>match.n))+1}`,start:'15:45',end:'16:05',teams:['',''],status:'upcoming',points:[0,0],history:[]});
+ state.schemaVersion=2;return state;
 }
 export function matchWinner(points:[number,number]):number|null{
  if(points[0]>=15&&points[0]-points[1]>=2)return 0;
@@ -23,7 +31,7 @@ const assert=(ok:unknown,message:string)=>{if(!ok)throw new GameError(message);}
 const safePoints=(v:unknown)=>{assert(Array.isArray(v)&&v.length===2&&v.every(x=>Number.isSafeInteger(x)&&x>=0&&x<=999),'Enter valid scores.');return v as [number,number];};
 export function transition(input:State,action:any):State{
  assert(action&&typeof action==='object','Invalid action.');
- const state=structuredClone(input);
+ const state=normalizeState(input);
  if(action.type==='addFixture'){
   assert(Array.isArray(action.teams)&&action.teams.length===2&&action.teams.every((t:any)=>typeof t==='string'&&t.trim().length>0&&t.trim().length<=60),'Enter both team names (up to 60 characters).');
   assert(typeof action.round==='string'&&action.round.trim().length>0&&action.round.trim().length<=60,'Enter a round name (up to 60 characters).');
@@ -72,4 +80,4 @@ export function transition(input:State,action:any):State{
  }
  state.updated=new Date().toISOString();return state;
 }
-export function publicState(state:State){return {updated:state.updated,matches:state.matches.map(({history,...m})=>({...m,canUndo:history.length>0}))};}
+export function publicState(input:State){const state=normalizeState(input);return {updated:state.updated,schemaVersion:state.schemaVersion,matches:state.matches.map(({history,...m})=>({...m,canUndo:history.length>0}))};}
