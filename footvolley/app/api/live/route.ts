@@ -1,9 +1,9 @@
 import {db,json,authed,checkOrigin,limitWrites} from '@/lib/server';
-import {GameError,initialState,transition,publicState} from '@/lib/game';
+import {GameError,initialState,normalizeState,transition,publicState} from '@/lib/game';
 import {readJson,HttpError} from '@/lib/http-security';
 import {servePublic,rememberPublic} from '@/lib/live-read';
 export const dynamic='force-dynamic';
-async function read(){const row=await db().prepare('SELECT version,data FROM event_state WHERE id=1').first<{version:number,data:string}>();return row?{version:row.version,state:JSON.parse(row.data) as ReturnType<typeof initialState>}:{version:0,state:initialState()};}
+async function read(){const row=await db().prepare('SELECT version,data FROM event_state WHERE id=1').first<{version:number,data:string}>();return row?{version:row.version,state:normalizeState(JSON.parse(row.data) as ReturnType<typeof initialState>)}:{version:0,state:initialState()};}
 export async function GET(req:Request=new Request('https://local.test/api/live')){return servePublic(req,db());}
 export async function POST(req:Request){try{
  checkOrigin(req);if(!await authed(req))return json({error:'Log in to update scores.'},401);await limitWrites(req);const body=await readJson(req);
